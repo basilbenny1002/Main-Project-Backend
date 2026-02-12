@@ -1,8 +1,34 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from core.manager import manager
 from services.database import DatabaseService
+from models.schemas import ManualCartItemRequest
 
 router = APIRouter()
+
+@router.post("/debug/add-item")
+async def debug_add_item(item: ManualCartItemRequest):
+    """
+    Manually inject an item into the cart. 
+    Useful for testing the Frontend without the ESP32.
+    """
+    product_data = {
+        "id": item.product_id,
+        "name": item.name,
+        "price": item.price,
+        "quantity": item.quantity
+    }
+    
+    response = {
+        "event": "cart_update",
+        "action": "add",
+        "product": product_data
+    }
+    
+    # Broadcast to anyone connected to this cart (e.g., the website)
+    await manager.broadcast_to_cart(item.cart_id, response)
+    
+    return {"status": "success", "message": f"Added {item.name} to cart {item.cart_id}"}
+
 
 @router.websocket("/cart/{cart_id}")
 async def cart_websocket_endpoint(websocket: WebSocket, cart_id: str):

@@ -20,3 +20,11 @@ class Product(BaseModel):
     name: str
     price: float
     description: Optional[str] = None
+
+class ManualCartItemRequest(BaseModel):
+    """Request model for manually adding an item via API."""
+    cart_id: str
+    product_id: int
+    name: str
+    price: float
+    quantity: int = 1
