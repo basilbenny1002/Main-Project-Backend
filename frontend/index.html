@@ -3,127 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Cart Dashboard</title>
+    <title>Smart Cart Live</title>
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        .status { padding: 10px; margin-bottom: 20px; border-radius: 4px; }
-        .connected { background-color: #d4edda; color: #155724; }
-        .disconnected { background-color: #f8d7da; color: #721c24; }
-        
-        .product-card {
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 10px;
+        :root {
+            --primary: #2563eb;
+            --success: #22c55e;
+            --error: #ef4444;
+            --bg: #f8fafc;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .status-bar {
+            padding: 10px;
             border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .connected { background: #dcfce7; color: #166534; }
+        .disconnected { background: #fee2e2; color: #991b1b; }
+
+        .cart-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            overflow: hidden;
+        }
+
+        .cart-header {
+            background: #f1f5f9;
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        #cart-items {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .cart-item {
+            padding: 15px;
+            border-bottom: 1px solid #f1f5f9;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
+            animation: slideIn 0.3s ease-out;
         }
-        
-        .product-info h3 { margin: 0 0 5px 0; }
-        .product-details { color: #666; font-size: 0.9em; }
-        .price-tag { font-weight: bold; font-size: 1.2em; color: #2c3e50; }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .item-details h3 { margin: 0 0 5px 0; font-size: 1rem; }
+        .item-details p { margin: 0; color: #64748b; font-size: 0.9rem; }
+        .item-price { font-weight: bold; color: var(--primary); }
+
+        .total-section {
+            padding: 20px;
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .pay-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .pay-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+        .pay-btn:hover:not(:disabled) { background: #1d4ed8; }
+
+        .empty-cart-msg {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
     </style>
 </head>
 <body>
-    <h1>Shopping Cart Live View</h1>
-    <div id="connectionStatus" class="status disconnected">Connecting...</div>
-    
-    <div id="cartContainer">
-        <!-- Products will appear here -->
-        <p id="emptyMsg" style="color: #888;">Waiting for live updates...</p>
+
+    <div class="header">
+        <h1>🛒 Your Smart Cart</h1>
+        <p>Scan items to add them instantly.</p>
+    </div>
+
+    <div id="connection-status" class="status-bar disconnected">Connecting to server...</div>
+
+    <div class="cart-container">
+        <div class="cart-header">
+            <span>Items</span>
+            <span>Qty</span>
+        </div>
+        
+        <ul id="cart-items">
+            <!-- Items injected by JS -->
+            <li class="empty-cart-msg">Cart is empty</li>
+        </ul>
+
+        <div class="total-section">
+            <span>Total:</span>
+            <span id="total-price">$0.00</span>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <button id="pay-btn" class="pay-btn" onclick="initiatePayment()">Pay Now</button>
     </div>
 
     <script>
-        // Get UUID from URL query parameter (e.g., index.html?id=550e8400...)
-        const params = new URLSearchParams(window.location.search);
-        const cartId = params.get('id');
-        const statusDiv = document.getElementById('connectionStatus');
-        const container = document.getElementById('cartContainer');
-        const emptyMsg = document.getElementById('emptyMsg');
+        // CONFIGURATION
+        // If testing locally (Go Live), use localhost:8000
+        // If deployed to Render, change to "wss://your-app-name.onrender.com"
+        const BACKEND_HOST = "ws://127.0.0.1:8000"; 
+        
+        const statusDiv = document.getElementById('connection-status');
+        const itemsList = document.getElementById('cart-items');
+        const totalEl = document.getElementById('total-price');
+        const payBtn = document.getElementById('pay-btn');
 
-        if (!cartId) {
-            statusDiv.textContent = "Error: No Cart ID provided. Add ?id=YOUR_UUID to the URL.";
-        } else {
-            // Establish WebSocket connection
-            const wsUrl = `ws://localhost:8000/ws/${cartId}`;
+        // Get Cart ID from URL (?id=...)
+        const urlParams = new URLSearchParams(window.location.search);
+        // Default ID for testing if none provided
+        const cartId = urlParams.get('id') || "550e8400-e29b-41d4-a716-446655440000"; 
+        
+        // Add ID to page title/header for clarity
+        document.title = `Smart Cart - ${cartId.substring(0,8)}...`;
+        
+        console.log(`Using Cart ID: ${cartId}`);
+
+        // State
+        let cartTotal = 0.0;
+        let cartItems = []; // Array of {id, name, price, quantity}
+
+        function connect() {
+            // Note: BACKEND_HOST should not end with a slash in this concatenation logic
+            const wsUrl = `${BACKEND_HOST}/cart/${cartId}`;
+            console.log("Connecting to:", wsUrl);
+            
             const ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
-                statusDiv.textContent = `Connected to Cart: ${cartId}`;
-                statusDiv.className = 'status connected';
+                statusDiv.textContent = "✅ Connected to Cart System";
+                statusDiv.className = "status-bar connected";
+                payBtn.disabled = false;
             };
 
-            ws.onclose = (event) => {
-                if (event.code === 4000) {
-                    statusDiv.textContent = "Connection Rejected: Invalid UUID";
-                } else if (event.code === 4003) {
-                     statusDiv.textContent = "Connection Rejected: Cart already active";
-                } else {
-                    statusDiv.textContent = "Connection Lost";
-                }
-                statusDiv.className = 'status disconnected';
+            ws.onclose = () => {
+                statusDiv.textContent = "❌ Disconnected - Reconnecting in 3s...";
+                statusDiv.className = "status-bar disconnected";
+                payBtn.disabled = true;
+                // Try reconnect after 3s
+                setTimeout(connect, 3000);
             };
 
+            ws.onerror = (err) => {
+                console.error("WS Error (check console):", err);
+                ws.close();
+            };
+
+            // Handle incoming data
             ws.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                handleMessage(message);
+                try {
+                    const msg = JSON.parse(event.data);
+                    console.log("Received:", msg);
+
+                    if (msg.event === "cart_update") {
+                        handleCartUpdate(msg.action, msg.product);
+                    } else if (msg.command === "unlock") {
+                        alert("Unlock approved! You may leave the store.");
+                    }
+                } catch (e) {
+                    console.log("Received non-JSON:", event.data);
+                }
             };
-
-            function handleMessage(data) {
-                // Remove empty message if it exists
-                if (emptyMsg) emptyMsg.style.display = 'none';
-
-                if (data.action === 'update') {
-                    updateProduct(data.product);
-                } else if (data.action === 'remove') {
-                    removeProduct(data.product_id);
-                }
-            }
-
-            function updateProduct(product) {
-                let card = document.getElementById(`prod-${product.id}`);
-                
-                // HTML for the card content
-                const htmlContent = `
-                    <div class="product-info">
-                        <h3>${product.name}</h3>
-                        <div class="product-details">
-                            Quantity: <span id="qty-${product.id}">${product.quantity}</span> | 
-                            Meta: ${product.description || 'N/A'}
-                        </div>
-                    </div>
-                    <div class="price-tag">$${product.price}</div>
-                `;
-
-                if (card) {
-                    // Update existing
-                    card.innerHTML = htmlContent;
-                    // Flash effect
-                    card.style.backgroundColor = '#e8f4fd';
-                    setTimeout(() => card.style.backgroundColor = '#fff', 500);
-                } else {
-                    // Create new
-                    card = document.createElement('div');
-                    card.id = `prod-${product.id}`;
-                    card.className = 'product-card';
-                    card.innerHTML = htmlContent;
-                    container.appendChild(card);
-                }
-            }
-
-            function removeProduct(productId) {
-                const card = document.getElementById(`prod-${productId}`);
-                if (card) {
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateX(20px)';
-                    setTimeout(() => card.remove(), 300);
-                }
-            }
         }
+
+        function handleCartUpdate(action, product) {
+            // Remove "empty" message if it exists
+            const emptyMsg = document.querySelector('.empty-cart-msg');
+            if (emptyMsg) emptyMsg.remove();
+
+            if (action === "add") {
+                // Check if already in list
+                const existingIndex = cartItems.findIndex(p => p.id === product.id);
+                
+                if (existingIndex > -1) {
+                    cartItems[existingIndex].quantity += 1; // Backend logic might differ, for now simple increment
+                } else {
+                    cartItems.push({...product, quantity: 1}); // Ensure qty exists
+                }
+            } 
+            // Implement 'remove' logic if needed here
+
+            renderCart();
+        }
+
+        function renderCart() {
+            itemsList.innerHTML = "";
+            cartTotal = 0;
+
+            if (cartItems.length === 0) {
+                itemsList.innerHTML = '<li class="empty-cart-msg">Cart is empty</li>';
+                totalEl.textContent = "$0.00";
+                return;
+            }
+
+            cartItems.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'cart-item';
+                
+                const itemTotal = item.price * item.quantity;
+                cartTotal += itemTotal;
+
+                li.innerHTML = `
+                    <div class="item-details">
+                        <h3>${item.name}</h3>
+                        <p>$${item.price.toFixed(2)} x ${item.quantity}</p>
+                    </div>
+                    <div class="item-price">$${itemTotal.toFixed(2)}</div>
+                `;
+                itemsList.appendChild(li);
+            });
+
+            totalEl.textContent = "$" + cartTotal.toFixed(2);
+        }
+
+        async function initiatePayment() {
+            if (cartTotal <= 0) {
+                alert("Cart is empty!");
+                return;
+            }
+            alert(`Simulating Payment for $${cartTotal.toFixed(2)}...`);
+            
+            // Here you would fetch(HTTP POST) to the backend '/api/pay' endpoint
+            // but for now, we just simulate the flow.
+        }
+
+        // Start connection
+        connect();
+
     </script>
 </body>
 </html>

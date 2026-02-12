@@ -1,8 +1,18 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from routers import cart, website
 
 app = FastAPI()
+
+# --- CORS Configuration ---
+# Allows requests from any origin (e.g., Netlify, Localhost)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include Routers
 app.include_router(cart.router)
@@ -12,15 +22,3 @@ app.include_router(website.router)
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
-
-# --- Static/HTML Routes ---
-
-@app.get("/")
-async def get_index():
-    # Adjusted path to frontend folder
-    return FileResponse("frontend/index.html")
-
-@app.get("/admin")
-async def get_admin():
-    # Adjusted path to frontend folder
-    return FileResponse("frontend/admin.html")
