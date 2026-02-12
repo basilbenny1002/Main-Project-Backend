@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Cart Dashboard</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .status { padding: 10px; margin-bottom: 20px; border-radius: 4px; }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        
+        .product-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .product-info h3 { margin: 0 0 5px 0; }
+        .product-details { color: #666; font-size: 0.9em; }
+        .price-tag { font-weight: bold; font-size: 1.2em; color: #2c3e50; }
+    </style>
+</head>
+<body>
+    <h1>Shopping Cart Live View</h1>
+    <div id="connectionStatus" class="status disconnected">Connecting...</div>
+    
+    <div id="cartContainer">
+        <!-- Products will appear here -->
+        <p id="emptyMsg" style="color: #888;">Waiting for live updates...</p>
+    </div>
+
+    <script>
+        // Get UUID from URL query parameter (e.g., index.html?id=550e8400...)
+        const params = new URLSearchParams(window.location.search);
+        const cartId = params.get('id');
+        const statusDiv = document.getElementById('connectionStatus');
+        const container = document.getElementById('cartContainer');
+        const emptyMsg = document.getElementById('emptyMsg');
+
+        if (!cartId) {
+            statusDiv.textContent = "Error: No Cart ID provided. Add ?id=YOUR_UUID to the URL.";
+        } else {
+            // Establish WebSocket connection
+            const wsUrl = `ws://localhost:8000/ws/${cartId}`;
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                statusDiv.textContent = `Connected to Cart: ${cartId}`;
+                statusDiv.className = 'status connected';
+            };
+
+            ws.onclose = (event) => {
+                if (event.code === 4000) {
+                    statusDiv.textContent = "Connection Rejected: Invalid UUID";
+                } else if (event.code === 4003) {
+                     statusDiv.textContent = "Connection Rejected: Cart already active";
+                } else {
+                    statusDiv.textContent = "Connection Lost";
+                }
+                statusDiv.className = 'status disconnected';
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+
+            function handleMessage(data) {
+                // Remove empty message if it exists
+                if (emptyMsg) emptyMsg.style.display = 'none';
+
+                if (data.action === 'update') {
+                    updateProduct(data.product);
+                } else if (data.action === 'remove') {
+                    removeProduct(data.product_id);
+                }
+            }
+
+            function updateProduct(product) {
+                let card = document.getElementById(`prod-${product.id}`);
+                
+                // HTML for the card content
+                const htmlContent = `
+                    <div class="product-info">
+                        <h3>${product.name}</h3>
+                        <div class="product-details">
+                            Quantity: <span id="qty-${product.id}">${product.quantity}</span> | 
+                            Meta: ${product.description || 'N/A'}
+                        </div>
+                    </div>
+                    <div class="price-tag">$${product.price}</div>
+                `;
+
+                if (card) {
+                    // Update existing
+                    card.innerHTML = htmlContent;
+                    // Flash effect
+                    card.style.backgroundColor = '#e8f4fd';
+                    setTimeout(() => card.style.backgroundColor = '#fff', 500);
+                } else {
+                    // Create new
+                    card = document.createElement('div');
+                    card.id = `prod-${product.id}`;
+                    card.className = 'product-card';
+                    card.innerHTML = htmlContent;
+                    container.appendChild(card);
+                }
+            }
+
+            function removeProduct(productId) {
+                const card = document.getElementById(`prod-${productId}`);
+                if (card) {
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateX(20px)';
+                    setTimeout(() => card.remove(), 300);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

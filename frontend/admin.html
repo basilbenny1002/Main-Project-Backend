@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cart Admin Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; background-color: #f5f5f5; }
+        
+        /* Sidebar for Carts */
+        .sidebar { width: 300px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #34495e; }
+        .sidebar-header h2 { margin: 0; font-size: 1.2rem; }
+        .cart-list { flex: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+        .cart-item { padding: 15px 20px; border-bottom: 1px solid #34495e; cursor: pointer; transition: background 0.2s; }
+        .cart-item:hover { background-color: #34495e; }
+        .cart-item.active { background-color: #3498db; border-left: 4px solid #fff; }
+        .cart-item .uuid { font-family: monospace; font-size: 0.9em; display: block; }
+        .cart-item .status { font-size: 0.8em; color: #bdc3c7; }
+
+        /* Main Content */
+        .main { flex: 1; padding: 30px; overflow-y: auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .refresh-btn { padding: 8px 15px; background: #2c3e50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        
+        /* Product Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #2ecc71; }
+        .card h3 { margin: 0 0 10px 0; color: #2c3e50; }
+        .card-row { display: flex; justify-content: space-between; margin-bottom: 8px; color: #666; font-size: 0.9em; }
+        .btn-remove { width: 100%; padding: 10px; background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        .btn-remove:hover { background-color: #c0392b; }
+
+        .empty-state { text-align: center; color: #95a5a6; margin-top: 100px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>Active Carts</h2>
+            <small id="lastUpdated">Updating...</small>
+        </div>
+        <ul class="cart-list" id="cartList">
+            <!-- Cart items will go here -->
+        </ul>
+    </div>
+
+    <div class="main">
+        <div id="noSelection" class="empty-state">
+            <h2>Select a cart to view details</h2>
+        </div>
+
+        <div id="cartView" class="hidden">
+            <div class="header">
+                <h1 id="selectedCartTitle">Cart Details</h1>
+                <button onclick="fetchCartDetails(currentCartId)" class="refresh-btn">Refresh Products</button>
+            </div>
+            
+            <div id="productsGrid" class="grid">
+                <!-- Products go here -->
+            </div>
+            <div id="emptyCartMsg" class="empty-state hidden">
+                <p>This cart is empty.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCartId = null;
+
+        // Poll for active carts every 5 seconds
+        setInterval(fetchCarts, 5000);
+        fetchCarts();
+
+        async function fetchCarts() {
+            try {
+                const res = await fetch('/api/monitor/carts');
+                const data = await res.json();
+                renderCartList(data.carts);
+                document.getElementById('lastUpdated').innerText = 'Last updated: ' + new Date().toLocaleTimeString();
+            } catch (e) {
+                console.error("Failed to fetch carts", e);
+            }
+        }
+
+        function renderCartList(carts) {
+            const list = document.getElementById('cartList');
+            const wasEmpty = list.children.length === 0;
+            list.innerHTML = '';
+            
+            carts.forEach(id => {
+                const li = document.createElement('li');
+                li.className = `cart-item ${currentCartId === id ? 'active' : ''}`;
+                li.innerHTML = `<span class="uuid">${id}</span><span class="status">Active Connection</span>`;
+                li.onclick = () => selectCart(id);
+                list.appendChild(li);
+            });
+
+            if (carts.length === 0) {
+                list.innerHTML = '<li style="padding:20px; color:#bdc3c7">No active carts</li>';
+            }
+        }
+
+        function selectCart(id) {
+            currentCartId = id;
+            document.getElementById('noSelection').classList.add('hidden');
+            document.getElementById('cartView').classList.remove('hidden');
+            document.getElementById('selectedCartTitle').innerText = `Cart: ${id}`;
+            
+            // Highlight in sidebar
+            document.querySelectorAll('.cart-item').forEach(el => el.classList.remove('active'));
+            // Since we rebuild the list constantly, this valid selection might be lost until re-render, 
+            // but fetchCarts will re-apply 'active' class based on variable.
+            fetchCarts(); 
+            
+            fetchCartDetails(id);
+        }
+
+        async function fetchCartDetails(id) {
+            if (!id) return;
+            try {
+                const res = await fetch(`/api/monitor/cart/${id}`);
+                const data = await res.json();
+                renderProducts(data.items);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderProducts(items) {
+            const grid = document.getElementById('productsGrid');
+            const emptyMsg = document.getElementById('emptyCartMsg');
+            grid.innerHTML = '';
+
+            if (items.length === 0) {
+                emptyMsg.classList.remove('hidden');
+            } else {
+                emptyMsg.classList.add('hidden');
+                items.forEach(prod => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <h3>${prod.name}</h3>
+                        <div class="card-row"><span>ID:</span> <code>${prod.id}</code></div>
+                        <div class="card-row"><span>Price:</span> $${prod.price}</div>
+                        <div class="card-row"><span>Qty:</span> ${prod.quantity}</div>
+                        <div class="card-row"><span>Desc:</span> ${prod.description || '-'}</div>
+                        <button class="btn-remove" onclick="removeProduct('${prod.id}', '${prod.name}')">Remove Item</button>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+        }
+
+        async function removeProduct(productId, productName) {
+            if (!confirm(`Are you sure you want to remove "${productName}" from this cart?`)) return;
+
+            try {
+                const res = await fetch('/api/remove_cart_product', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cart_id: currentCartId,
+                        product_id: productId
+                    })
+                });
+
+                if (res.ok) {
+                    // Update the details view
+                    fetchCartDetails(currentCartId);
+                } else {
+                    alert('Failed to remove product');
+                }
+            } catch (e) {
+                alert('Error connecting to backend');
+            }
+        }
+    </script>
+</body>
+</html>
