@@ -116,34 +116,45 @@
         <p>Scan items to add them instantly.</p>
     </div>
 
-    <div id="connection-status" class="status-bar disconnected">Connecting to server...</div>
-
-    <div class="cart-container">
-        <div class="cart-header">
-            <span>Items</span>
-            <span>Qty</span>
-        </div>
-        
-        <ul id="cart-items">
-            <!-- Items injected by JS -->
-            <li class="empty-cart-msg">Cart is empty</li>
-        </ul>
-
-        <div class="total-section">
-            <span>Total:</span>
-            <span id="total-price">$0.00</span>
-        </div>
+    <!-- Login/ID Entry Section -->
+    <div id="login-container" style="text-align: center; margin-top: 50px;">
+        <h2>Enter Cart ID to Begin</h2>
+        <input type="text" id="cart-id-input" placeholder="e.g. 550e8400..." style="padding: 10px; width: 80%; margin-bottom: 20px; font-size: 16px;">
+        <br>
+        <button class="pay-btn" onclick="submitCartId()">Connect to Cart</button>
     </div>
 
-    <div style="text-align: center; margin-top: 20px;">
-        <button id="pay-btn" class="pay-btn" onclick="initiatePayment()">Pay Now</button>
+    <!-- Main App Container (Hidden by default) -->
+    <div id="main-container" style="display: none;">
+        <div id="connection-status" class="status-bar disconnected">Connecting to server...</div>
+
+        <div class="cart-container">
+            <div class="cart-header">
+                <span>Items</span>
+                <span>Qty</span>
+            </div>
+            
+            <ul id="cart-items">
+                <!-- Items injected by JS -->
+                <li class="empty-cart-msg">Cart is empty</li>
+            </ul>
+
+            <div class="total-section">
+                <span>Total:</span>
+                <span id="total-price">$0.00</span>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="pay-btn" class="pay-btn" onclick="initiatePayment()">Pay Now</button>
+        </div>
     </div>
 
     <script>
         // CONFIGURATION
         // If testing locally (Go Live), use localhost:8000
         // If deployed to Render, change to "wss://your-app-name.onrender.com"
-        const BACKEND_HOST = "ws://127.0.0.1:8000"; 
+        const BACKEND_HOST = "wss://main-project-backend-lu62.onrender.com"; 
         
         const statusDiv = document.getElementById('connection-status');
         const itemsList = document.getElementById('cart-items');
@@ -152,17 +163,54 @@
 
         // Get Cart ID from URL (?id=...)
         const urlParams = new URLSearchParams(window.location.search);
-        // Default ID for testing if none provided
-        const cartId = urlParams.get('id') || "550e8400-e29b-41d4-a716-446655440000"; 
-        
-        // Add ID to page title/header for clarity
-        document.title = `Smart Cart - ${cartId.substring(0,8)}...`;
-        
-        console.log(`Using Cart ID: ${cartId}`);
+        let cartId = urlParams.get('id');
+
+        // Config elements
+        const loginContainer = document.getElementById('login-container');
+        const mainContainer = document.getElementById('main-container');
 
         // State
         let cartTotal = 0.0;
-        let cartItems = []; // Array of {id, name, price, quantity}
+        let cartItems = []; 
+
+        function init() {
+            if (cartId) {
+                // ID exists in URL -> Start App
+                showApp();
+                connect();
+            } else {
+                // No ID -> Show Login
+                showLogin();
+            }
+        }
+
+        function showLogin() {
+            loginContainer.style.display = 'block';
+            mainContainer.style.display = 'none';
+        }
+
+        function showApp() {
+            loginContainer.style.display = 'none';
+            mainContainer.style.display = 'block';
+            document.title = `Smart Cart - ${cartId.substring(0,8)}...`;
+            console.log(`Using Cart ID: ${cartId}`);
+        }
+
+        function submitCartId() {
+            const inputId = document.getElementById('cart-id-input').value.trim();
+            if (inputId.length > 5) {
+                cartId = inputId;
+                // Update URL without reloading
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('id', cartId);
+                window.history.pushState({}, '', newUrl);
+                
+                showApp();
+                connect();
+            } else {
+                alert("Please enter a valid Cart ID");
+            }
+        }
 
         function connect() {
             // Note: BACKEND_HOST should not end with a slash in this concatenation logic
@@ -259,6 +307,30 @@
 
         async function initiatePayment() {
             if (cartTotal <= 0) {
+                alert("Cart is empty!");
+                return;
+            }
+            alert(`Simulating Payment for $${cartTotal.toFixed(2)}...`);
+            
+            // Here you would fetch(HTTP POST) to the backend '/api/pay' endpoint
+            // but for now, we just simulate the flow.
+        }
+
+        // Start initialization
+        init();
+
+    </script>
+</body>
+</html>
+                `;
+                itemsList.appendChild(li);
+            });
+
+            totalEl.textContent = "$" + cartTotal.toFixed(2);
+        }
+
+        async funinitialization
+        ini (cartTotal <= 0) {
                 alert("Cart is empty!");
                 return;
             }
